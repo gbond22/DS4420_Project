@@ -1,0 +1,8 @@
+.DS_Store
+.ipynb_checkpoints/
+data/**/survey_results_public.csv
+data/**/survey_results_public*.csv
+.DS_Store
+.ipynb_checkpoints/
+data/**/survey_results_public.csv
+data/**/survey_results_public*.csv
