@@ -8,22 +8,141 @@ output: pdf_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 options(mc.cores = min(4, parallel::detectCores()))
+set.seed(42)
 ```
 
 Necessary imports:
 ```{r}
-library(brms)
+library(readr)
+library(dplyr)
 library(ggplot2)
+library(brms)
 ```
 
-Initial data import (2 survey years combined)
+Initial data import (2 survey years combined). Column types 
+specified due to parsing issue on raw import.
 ```{r}
-df <- read_csv("data/combined_survey.csv")
-
+df <- readr::read_csv(
+  "data/combined_survey.csv",
+  col_types = readr::cols(.default = readr::col_character()),
+  show_col_types = FALSE
+)
 ```
 
-
+Ensuring parsing issues were fixed
 ```{r}
+problems(df)
+```
 
+Data inspection 1 (dimensions, top 5 rows, cols)
+```{r}
+dim(df)
+head(df)
+names(df)
+```
 
+Data inspection 2 (summary, checking for NAs)
+```{r}
+summary(df)
+
+table(df$AIAcc, useNA = "ifany")
+table(df$AISelect, useNA = "ifany")
+table(df$year, useNA = "ifany")
+
+colSums(is.na(df))
+```
+Helper function for preprocessing years of experience
+```{r}
+# Helper
+clean_experience <- function(x) {
+  x <- trimws(x)
+  
+  dplyr::case_when(
+    is.na(x) ~ NA_real_,
+    x == "" ~ NA_real_,
+    x == "Less than 1 year" ~ 0.5,
+    x == "More than 50 years" ~ 51,
+    TRUE ~ suppressWarnings(as.numeric(x))
+  )
+}
+
+# Implementing helper
+clean_factor <- function(x) {
+  x <- trimws(x)
+  x[is.na(x) | x == ""] <- "Missing"
+  as.factor(x)
+}
+```
+
+One more inspection block for messy numeric fields
+```{r}
+sort(unique(df$YearsCode))[1:10]
+tail(sort(unique(df$YearsCode)), 10)
+
+sort(unique(df$WorkExp))[1:10]
+tail(sort(unique(df$WorkExp)), 10)
+```
+Initial Bayes model processing:
+- Restricting model to AI users only
+- Predicting distrust vs. trust
+- Using simple feature set for first attempt
+```{r}
+df_model <- df %>%
+  dplyr::filter(AISelect == "Yes") %>%
+  dplyr::transmute(
+    y = ifelse(AIAcc %in% c("Somewhat distrust", "Highly distrust"), 1, 0),
+    YearsCode = clean_experience(YearsCode),
+    Age = clean_factor(Age),
+    EdLevel = clean_factor(EdLevel),
+    OrgSize = clean_factor(OrgSize),
+    AISent = clean_factor(AISent),
+    AIThreat = clean_factor(AIThreat),
+    RemoteWork = clean_factor(RemoteWork),
+    AIComplex = clean_factor(AIComplex),
+    year = clean_factor(year)
+  )
+
+dim(df_model)
+head(df_model)
+table(df_model$y)
+```
+
+Final preprocessing for Bayes model
+```{r}
+summary(df_model$YearsCode)
+sum(is.na(df_model$YearsCode))
+
+df_model <- df_model %>%
+  dplyr::filter(!is.na(YearsCode))
+
+df_model$YearsCode_z <- as.numeric(scale(df_model$YearsCode))
+
+summary(df_model$YearsCode_z)
+dim(df_model)
+table(df_model$y)
+```
+
+Final modeling df
+```{r}
+df_model <- df_model %>%
+  dplyr::select(
+    y, YearsCode_z, Age, EdLevel, OrgSize,
+    AISent, AIThreat, RemoteWork, AIComplex, year
+  )
+
+str(df_model)
+```
+
+Initial bayes log-regression formula
+```{r}
+bayes_formula <- bf(
+  y ~ YearsCode_z + Age + EdLevel + OrgSize +
+    AISent + AIThreat + RemoteWork + AIComplex + year
+)
+
+brms::default_prior(
+  bayes_formula,
+  data = df_model,
+  family = bernoulli("logit")
+)
 ```
