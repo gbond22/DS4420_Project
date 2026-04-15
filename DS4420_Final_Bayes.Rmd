@@ -5,3 +5,25 @@ date: "'r Sys.Date()"
 output: pdf_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(mc.cores = min(4, parallel::detectCores()))
+```
+
+Necessary imports:
+```{r}
+library(brms)
+library(ggplot2)
+```
+
+Initial data import (2 survey years combined)
+```{r}
+df <- read_csv("data/combined_survey.csv")
+
+```
+
+
+```{r}
+
+
+```
