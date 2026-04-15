@@ -1,7 +1,7 @@
 ---
 title: "DS4420 Developer Distrust Project - Bayes"
 author: "Gavin Bond"
-date: "'r Sys.Date()"
+date: "`r Sys.Date()`"
 output: pdf_document
 ---
 
@@ -51,22 +51,28 @@ table(df$year, useNA = "ifany")
 
 colSums(is.na(df))
 ```
+From this, we can see there are many missing values; in terms of how it will
+effect our modeling choices, we are intentionally removing DevType, WorkExp, 
+and ICorPM for our initial fit due to high levels of missing values, high
+level count, and feature overlap. Will reevaluate this decision after full 
+first model implementation.
+
 Helper function for preprocessing years of experience
 ```{r}
-# Helper
-clean_experience <- function(x) {
+# Helper for experience
+clean_exp <- function(x) {
   x <- trimws(x)
-  
-  dplyr::case_when(
+  out <- dplyr::case_when(
     is.na(x) ~ NA_real_,
     x == "" ~ NA_real_,
     x == "Less than 1 year" ~ 0.5,
     x == "More than 50 years" ~ 51,
     TRUE ~ suppressWarnings(as.numeric(x))
   )
+  pmin(out, 51)
 }
 
-# Implementing helper
+# Helper for other missing factor values
 clean_factor <- function(x) {
   x <- trimws(x)
   x[is.na(x) | x == ""] <- "Missing"
@@ -74,7 +80,7 @@ clean_factor <- function(x) {
 }
 ```
 
-One more inspection block for messy numeric fields
+Final inspection for numeric fields
 ```{r}
 sort(unique(df$YearsCode))[1:10]
 tail(sort(unique(df$YearsCode)), 10)
@@ -82,16 +88,16 @@ tail(sort(unique(df$YearsCode)), 10)
 sort(unique(df$WorkExp))[1:10]
 tail(sort(unique(df$WorkExp)), 10)
 ```
-Initial Bayes model processing:
+Initial model processing:
 - Restricting model to AI users only
-- Predicting distrust vs. trust
+- Predicting distrust vs. non-distrust (non-distrust includes "trust" and "neutral")
 - Using simple feature set for first attempt
 ```{r}
 df_model <- df %>%
   dplyr::filter(AISelect == "Yes") %>%
   dplyr::transmute(
     y = ifelse(AIAcc %in% c("Somewhat distrust", "Highly distrust"), 1, 0),
-    YearsCode = clean_experience(YearsCode),
+    YearsCode = clean_exp(YearsCode),
     Age = clean_factor(Age),
     EdLevel = clean_factor(EdLevel),
     OrgSize = clean_factor(OrgSize),
@@ -107,7 +113,7 @@ head(df_model)
 table(df_model$y)
 ```
 
-Final preprocessing for Bayes model
+Final preprocessing for model
 ```{r}
 summary(df_model$YearsCode)
 sum(is.na(df_model$YearsCode))
@@ -135,14 +141,97 @@ str(df_model)
 
 Initial bayes log-regression formula
 ```{r}
-bayes_formula <- bf(
-  y ~ YearsCode_z + Age + EdLevel + OrgSize +
-    AISent + AIThreat + RemoteWork + AIComplex + year
+init_bayes_formula <- bf(
+  y ~ YearsCode_z + AISent + AIThreat + AIComplex + year
 )
 
-brms::default_prior(
+# Default prior
+init_def_prior <- default_prior(
   bayes_formula,
   data = df_model,
   family = bernoulli("logit")
 )
+
+init_def_prior
+
+# Manual prior
+init_manual_prior <- c(
+  brms::set_prior("student_t(4, 0, 10)", class = "Intercept"),
+  brms::set_prior("normal(0, 2)", class = "b")
+)
+```
+
+Fitting initial bayes log-regression model 
+```{r}
+init_brm_logit <- brms::brm(
+  formula = init_bayes_formula,
+  family = bernoulli("logit"),
+  data = df_model,
+  chains = 4,
+  iter = 1000,
+  warmup = 180,
+  prior = init_manual_prior,
+  seed = 4420
+)
+```
+
+Checking initial model results & diagnostics
+```{r}
+summary(init_brm_logit)
+```
+Checking initial model diagnostics plot
+```{r}
+#plot(init_brm_logit)
+```
+
+Posterior predicted probabilities for initial model
+```{r}
+# Computing predictions
+init_pred_probs <- fitted(init_brm_logit)[, "Estimate"]
+
+# Viewing prediction sample and summary
+head(init_pred_probs)
+summary(init_pred_probs)
+
+# Predictions vs. reality plot
+plot(init_pred_probs, df_model$y,
+     main = "Posterior Mean Probabilities vs. Observed Outcome",
+     xlab = "Posterior Mean Probability of Distrust",
+     ylab = "Observed Distrust")
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
 ```
