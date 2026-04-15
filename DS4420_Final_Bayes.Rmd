@@ -147,7 +147,7 @@ init_bayes_formula <- bf(
 
 # Default prior
 init_def_prior <- default_prior(
-  bayes_formula,
+  init_bayes_formula,
   data = df_model,
   family = bernoulli("logit")
 )
@@ -199,17 +199,42 @@ plot(init_pred_probs, df_model$y,
      xlab = "Posterior Mean Probability of Distrust",
      ylab = "Observed Distrust")
 ```
-
+Improved summary output and plots
 ```{r}
+fixef(init_brm_logit)
 
+plot(conditional_effects(init_brm_logit, "YearsCode_z"))
+plot(conditional_effects(init_brm_logit, "AISent"))
+plot(conditional_effects(init_brm_logit, "AIThreat"))
+plot(conditional_effects(init_brm_logit, "AIComplex"))
+```
+Predicted probabilities by observed class
+```{r}
+prob_df <- data.frame(
+  prob = init_pred_probs,
+  y = as.factor(df_model$y)
+)
+
+# New plot, posterior mean prob. vs actual count
+ggplot(prob_df, aes(x = prob, fill = y)) +
+  geom_histogram(position = "identity", alpha = 0.5, bins = 30) +
+  labs(
+    title = "Predicted Probability of Distrust by Observed Class",
+    x = "Posterior Mean Probability of Distrust",
+    y = "Count",
+    fill = "Observed y"
+  )
 ```
 
+Boxplot of predicted probabilities by class
 ```{r}
-
-```
-
-```{r}
-
+ggplot(prob_df, aes(x = y, y = prob)) +
+  geom_boxplot() +
+  labs(
+    title = "Predicted Probability of Distrust by Observed Class",
+    x = "Observed Distrust",
+    y = "Posterior Mean Probability of Distrust"
+  )
 ```
 
 ```{r}
