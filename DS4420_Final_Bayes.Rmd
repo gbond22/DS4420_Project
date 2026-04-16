@@ -192,12 +192,6 @@ init_pred_probs <- fitted(init_brm_logit)[, "Estimate"]
 # Viewing prediction sample and summary
 head(init_pred_probs)
 summary(init_pred_probs)
-
-# Predictions vs. reality plot
-plot(init_pred_probs, df_model$y,
-     main = "Posterior Mean Probabilities vs. Observed Outcome",
-     xlab = "Posterior Mean Probability of Distrust",
-     ylab = "Observed Distrust")
 ```
 Improved summary output and plots
 ```{r}
@@ -237,12 +231,81 @@ ggplot(prob_df, aes(x = y, y = prob)) +
   )
 ```
 
+Building potential poster visual 1
 ```{r}
+coef_df <- as.data.frame(fixef(init_brm_logit))
+coef_df$term <- rownames(coef_df)
 
+coef_plot_df <- coef_df %>%
+  dplyr::filter(term != "Intercept") %>%
+  dplyr::filter(!grepl("Missing", term)) %>%
+  dplyr::mutate(
+    term = dplyr::case_when(
+      term == "YearsCode_z" ~ "Years of Coding (z)",
+      term == "AISentIndifferent" ~ "AI Sentiment: Indifferent",
+      term == "AISentUnfavorable" ~ "AI Sentiment: Unfavorable",
+      term == "AISentUnsure" ~ "AI Sentiment: Unsure",
+      term == "AISentVeryfavorable" ~ "AI Sentiment: Very favorable",
+      term == "AISentVeryunfavorable" ~ "AI Sentiment: Very unfavorable",
+      term == "AIThreatNo" ~ "AI Threat: No",
+      term == "AIThreatYes" ~ "AI Threat: Yes",
+      term == "AIComplexGoodbutnotgreatathandlingcomplextasks" ~ "AI Complex: Good, not great",
+      term == "AIComplexIdontuseAItoolsforcomplextasksDIdontknow" ~ "AI Complex: Don't use / don't know",
+      term == "AIComplexNeithergoodorbadathandlingcomplextasks" ~ "AI Complex: Neither good nor bad",
+      term == "AIComplexVerypoorathandlingcomplextasks" ~ "AI Complex: Very poor",
+      term == "AIComplexVerywellathandlingcomplextasks" ~ "AI Complex: Very well",
+      term == "year2025" ~ "Year: 2025",
+      TRUE ~ term
+    )
+  ) %>%
+  dplyr::arrange(Estimate)
+
+coef_plot <- ggplot(coef_plot_df, aes(x = Estimate, y = reorder(term, Estimate))) +
+  geom_point() +
+  geom_errorbarh(aes(xmin = Q2.5, xmax = Q97.5), height = 0.2) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(
+    title = "Bayesian Logistic Regression Coefficients",
+    x = "Posterior Mean Log-Odds Effect",
+    y = NULL
+  )
+
+coef_plot
+ggsave("figures/bayes_coef_forest.png", coef_plot, width = 9, height = 6, dpi = 300)
 ```
 
+Building potential poster visual 2:
 ```{r}
+# conditional effects
+ce_aisent <- conditional_effects(init_brm_logit, "AISent")
+# Df for reordering of factors
+aisent_df <- ce_aisent$AISent
 
+# Reordering factor levels for better layour
+aisent_df$AISent <- factor(
+  aisent_df$AISent,
+  levels = c(
+    "Very favorable",
+    "Favorable",
+    "Indifferent",
+    "Unsure",
+    "Unfavorable",
+    "Very unfavorable",
+    "Missing"
+  )
+)
+
+p_aisent <- ggplot(aisent_df, aes(x = AISent, y = estimate__)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = lower__, ymax = upper__), width = 0.2) +
+  labs(
+    title = "Predicted Distrust by AI Sentiment",
+    x = "AI Sentiment",
+    y = "Predicted Probability of Distrust"
+  )
+p_aisent 
+
+ggsave("figures/bayes_conditional_aisent.png", p_aisent, width = 8, height = 5, dpi = 300)
 ```
 
 ```{r}
