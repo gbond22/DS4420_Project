@@ -1,5 +1,5 @@
 ---
-title: "DS4420 Developer Distrust Project - Bayes"
+title: "DS4420 Developer Distrust Final Project - Bayes"
 author: "Gavin Bond"
 date: "`r Sys.Date()`"
 output: pdf_document
@@ -51,11 +51,10 @@ table(df$year, useNA = "ifany")
 
 colSums(is.na(df))
 ```
-From this, we can see there are many missing values; in terms of how it will
+From this, we can see there are still many missing values; in terms of how it will
 effect our modeling choices, we are intentionally removing DevType, WorkExp, 
-and ICorPM for our initial fit due to high levels of missing values, high
-level count, and feature overlap. Will reevaluate this decision after full 
-first model implementation.
+and ICorPM for our fitting due to high levels of missing values, high
+level count, and feature overlap.
 
 Helper function for preprocessing years of experience
 ```{r}
@@ -88,7 +87,7 @@ tail(sort(unique(df$YearsCode)), 10)
 sort(unique(df$WorkExp))[1:10]
 tail(sort(unique(df$WorkExp)), 10)
 ```
-Initial model processing:
+Model processing:
 - Restricting model to AI users only
 - Predicting distrust vs. non-distrust (non-distrust includes "trust" and "neutral")
 - Using simple feature set for first attempt
@@ -139,73 +138,72 @@ df_model <- df_model %>%
 str(df_model)
 ```
 
-Initial bayes log-regression formula
+Bayes log-regression formula
 ```{r}
-init_bayes_formula <- bf(
+bayes_formula <- bf(
   y ~ YearsCode_z + AISent + AIThreat + AIComplex + year
 )
 
 # Default prior
-init_def_prior <- default_prior(
+def_prior <- default_prior(
   init_bayes_formula,
   data = df_model,
   family = bernoulli("logit")
 )
 
-init_def_prior
+def_prior
 
 # Manual prior
-init_manual_prior <- c(
+manual_prior <- c(
   brms::set_prior("student_t(4, 0, 10)", class = "Intercept"),
   brms::set_prior("normal(0, 2)", class = "b")
 )
 ```
 
-Fitting initial bayes log-regression model 
+Fitting bayes log-regression model 
 ```{r}
-init_brm_logit <- brms::brm(
-  formula = init_bayes_formula,
+brm_logit <- brms::brm(
+  formula = bayes_formula,
   family = bernoulli("logit"),
   data = df_model,
   chains = 4,
   iter = 1000,
   warmup = 180,
-  prior = init_manual_prior,
+  prior = manual_prior,
   seed = 4420
 )
 ```
 
-Checking initial model results & diagnostics
+Checking model results & diagnostics
 ```{r}
-summary(init_brm_logit)
-```
-Checking initial model diagnostics plot
-```{r}
-#plot(init_brm_logit)
+summary(brm_logit)
 ```
 
-Posterior predicted probabilities for initial model
+Attempted to check model diagnostics plot,
+output took >15 minutes and never generated; removed from final version.
+
+Posterior predicted probabilities for model
 ```{r}
 # Computing predictions
-init_pred_probs <- fitted(init_brm_logit)[, "Estimate"]
+pred_probs <- fitted(brm_logit)[, "Estimate"]
 
 # Viewing prediction sample and summary
-head(init_pred_probs)
-summary(init_pred_probs)
+head(pred_probs)
+summary(pred_probs)
 ```
 Improved summary output and plots
 ```{r}
-fixef(init_brm_logit)
+fixef(brm_logit)
 
-plot(conditional_effects(init_brm_logit, "YearsCode_z"))
-plot(conditional_effects(init_brm_logit, "AISent"))
-plot(conditional_effects(init_brm_logit, "AIThreat"))
-plot(conditional_effects(init_brm_logit, "AIComplex"))
+plot(conditional_effects(brm_logit, "YearsCode_z"))
+plot(conditional_effects(brm_logit, "AISent"))
+plot(conditional_effects(brm_logit, "AIThreat"))
+plot(conditional_effects(brm_logit, "AIComplex"))
 ```
 Predicted probabilities by observed class
 ```{r}
 prob_df <- data.frame(
-  prob = init_pred_probs,
+  prob = pred_probs,
   y = as.factor(df_model$y)
 )
 
@@ -233,9 +231,11 @@ ggplot(prob_df, aes(x = y, y = prob)) +
 
 Building potential poster visual 1
 ```{r}
-coef_df <- as.data.frame(fixef(init_brm_logit))
+# Coefficient df
+coef_df <- as.data.frame(fixef(brm_logit))
 coef_df$term <- rownames(coef_df)
 
+# Converting label names to readable versions for plot
 coef_plot_df <- coef_df %>%
   dplyr::filter(term != "Intercept") %>%
   dplyr::filter(!grepl("Missing", term)) %>%
@@ -260,6 +260,7 @@ coef_plot_df <- coef_df %>%
   ) %>%
   dplyr::arrange(Estimate)
 
+# Log-reg coefficient plot 
 coef_plot <- ggplot(coef_plot_df, aes(x = Estimate, y = reorder(term, Estimate))) +
   geom_point() +
   geom_errorbarh(aes(xmin = Q2.5, xmax = Q97.5), height = 0.2) +
@@ -273,15 +274,22 @@ coef_plot <- ggplot(coef_plot_df, aes(x = Estimate, y = reorder(term, Estimate))
 coef_plot
 ggsave("figures/bayes_coef_forest.png", coef_plot, width = 9, height = 6, dpi = 300)
 ```
+This plot reveals that the most predictive variable for distrust in AI output is 
+a negative AI sentiment; the two most positive coefficients (~2.3 & ~2.1) fall into this category.
+The next most positive predictor is belief in AI's ability to handle complex tasks, at just above 1.
+Unsurprisingly, the three most negative coefficients are high AI complexity perceptions, followed
+by those who view AI "very favorably". This suggests the two most predictive variables of AI distrust
+among developers are AI sentiment and AI complexity perception, while other variables like belief
+that AI is a threat and years of coding hold much less predictive power.
 
 Building potential poster visual 2:
 ```{r}
 # conditional effects
-ce_aisent <- conditional_effects(init_brm_logit, "AISent")
+ce_aisent <- conditional_effects(brm_logit, "AISent")
 # Df for reordering of factors
 aisent_df <- ce_aisent$AISent
 
-# Reordering factor levels for better layour
+# Reordering factor levels for better layout
 aisent_df$AISent <- factor(
   aisent_df$AISent,
   levels = c(
@@ -295,6 +303,7 @@ aisent_df$AISent <- factor(
   )
 )
 
+# Conditional trust given sentiment graph
 p_aisent <- ggplot(aisent_df, aes(x = AISent, y = estimate__)) +
   geom_point(size = 3) +
   geom_errorbar(aes(ymin = lower__, ymax = upper__), width = 0.2) +
@@ -307,19 +316,9 @@ p_aisent
 
 ggsave("figures/bayes_conditional_aisent.png", p_aisent, width = 8, height = 5, dpi = 300)
 ```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
+This graph reveals an expected but critical relationship: The less favorably a 
+developer views AI, the more likely they are to distrust it's output. Interestingly,
+the "Unsure" group sees a much smaller jump in probability of distrust from the "indifferent"
+group, and developers who didn't respond to the AI sentiment question were relatively 
+unlikely to distrust AI output (with a large error band). However, these are less important
+effects, and likely stem from survey selection bias.
