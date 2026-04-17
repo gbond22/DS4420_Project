@@ -11,6 +11,10 @@ required files are:
 Which can both be downloaded from this URL:
 https://survey.stackoverflow.co/
 
+Within the survey folder, the survey schema is also included at:
+- `data/stack-overflow-developer-survey-2024/survey_results_schema.csv`
+- `data/stack-overflow-developer-survey-2025/survey_results_schema.csv`
+
 Once downloaded, please place the files in the directories listed in the file
 names above.
 
